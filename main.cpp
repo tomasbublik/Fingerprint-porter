@@ -59,12 +59,10 @@ int main(int argc, char *argv[]) {
     char mode[] = {'8', 'N', '1', 0};
 
 
-/*
     if (RS232_OpenComport(cport_nr, bdrate, mode)) {
         printf("Can not open com port\n");
         return (0);
     }
-*/
 
     sqlite3 *db;
     int rc;
