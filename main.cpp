@@ -37,16 +37,16 @@ int main(int argc, char *argv[]) {
     int i, n,
             cport_nr = 1,        /* /dev/ttyS0 (COM1 on windows) */
             bdrate = 115200;       /* 115200 baud */
-    bool masterMode = false; /*Only master mode of program can write to database and manage users*/
+    bool slaveMode = false; /*Only master mode of program can write to database and manage users*/
 
     if (argc >= 2) {
         cport_nr = atoi(argv[1]);
         printf("This program runs with following port: %s \n", argv[1]);
         //cout << "This program runs with following port: " << argv[1] << endl;
         if (argc == 3) {
-            if (0 == strcmp("MASTER", argv[2])) {
-                cout << "Running in MASTER mode" << endl;
-                masterMode = true;
+            if (0 == strcmp("SLAVE", argv[2])) {
+                cout << "Running in SLAVE mode" << endl;
+                slaveMode = true;
             }
         }
     } else if (argc > 3) {
