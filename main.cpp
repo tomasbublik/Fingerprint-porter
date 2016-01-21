@@ -37,7 +37,8 @@ int main(int argc, char *argv[]) {
     int i, n,
             cport_nr = 1,        /* /dev/ttyS0 (COM1 on windows) */
             bdrate = 115200;       /* 115200 baud */
-    bool slaveMode = false; /*Only master mode of program can write to database and manage users*/
+    bool slaveMode = false; /*Only slave mode of program can synchronize with database before start*/
+    bool masterMode = false; /*Only master mode of program can write to database and manage users*/
 
     if (argc >= 2) {
         cport_nr = atoi(argv[1]);
@@ -47,6 +48,10 @@ int main(int argc, char *argv[]) {
             if (0 == strcmp("SLAVE", argv[2])) {
                 cout << "Running in SLAVE mode" << endl;
                 slaveMode = true;
+            }
+            if (0 == strcmp("MASTER", argv[2])) {
+                cout << "Running in MASTER mode" << endl;
+                masterMode = true;
             }
         }
     } else if (argc > 3) {
@@ -82,13 +87,15 @@ int main(int argc, char *argv[]) {
     while (temp[0] != 'q') {
         printf("Guide: \n");
         //cout << "Guide:" << endl;
-        printf("(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit \n");
-        //cout << "(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit" << endl;
+        if (masterMode) {
+            printf("(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit \n");
+            //cout << "(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit" << endl;
 
-        //cin >> temp;
-        scanf("%s", temp);
+            //cin >> temp;
+            scanf("%s", temp);
+        }
 
-        if (temp[0] == '1') {
+        if (temp[0] == '1' || !masterMode) {
             printf("Entering normal mode \n");
             //cout << "Entering normal mode" << endl;
             searching_process(serial_commands);

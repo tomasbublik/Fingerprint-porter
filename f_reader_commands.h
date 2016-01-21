@@ -5,6 +5,9 @@
 #ifndef READER_NEWCPPCLASS_H
 #define READER_NEWCPPCLASS_H
 
+#include <time.h>
+#include <iostream>
+
 #define FINGERPRINT_STARTCODE 0xEF01
 
 using namespace std;
