@@ -152,15 +152,10 @@ void f_reader_commands::read_template_from_char_buffer(int char_buffer_id, char 
             //printf("%s\n", converted);
             if (buf[9] == 0x00) {
                 printf("Awaiting data packet \n");
-                char subbuff[2000];
-                /*memcpy(subbuff, &new_converted[24], sizeof subbuff);
-                subbuff[sizeof subbuff - 1] = '\0';*/
-
-                strncpy(subbuff, converted, sizeof subbuff);
-                subbuff[sizeof subbuff - 1] = '\0';
-                for (int i = 0; i < sizeof subbuff; i++) {
-                    dataFromReader[i] = subbuff[i];
-                }
+                memcpy(dataFromReader, &converted[24], sizeof converted);
+                dataFromReader[sizeof converted -1] = '\0';
+                /*strncpy(dataFromReader, converted, sizeof converted);
+                dataFromReader[sizeof converted -1] = '\0';*/
             } else {
                 printf("Instruction error \n");
             }
@@ -168,6 +163,39 @@ void f_reader_commands::read_template_from_char_buffer(int char_buffer_id, char 
         }
     }
 }
+
+bool f_reader_commands::write_template_to_reader(int page_id, unsigned char *dataFromReader) {
+    printf("Writing data to char buffer 1 and then to page id:%i \n", page_id);
+
+    int checksum = 0x01 + 0x04 + 0x09 + 0x01;
+    unsigned char checksumBytes[2];
+    checksumBytes[0] = (unsigned char) ((checksum >> 8) & 0xFF);
+    checksumBytes[1] = (unsigned char) (checksum & 0xFF);
+    unsigned char packetBuffer[] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x04, 0x09,
+                                    0x01, checksumBytes[0], checksumBytes[1]};
+
+    int returnCode = RS232_SendBuf(com_port, packetBuffer, sizeof(packetBuffer));
+    memset(&buf[0], 0, sizeof(buf));
+    while (1) {
+        sleepy(10);
+        returnCode = RS232_PollComport(com_port, buf, 4095);
+        if (returnCode > 0) {
+            char *converted = nullptr;
+            convert(returnCode, buf, converted);
+            if (buf[9] == 0x00) {
+                printf("Going to store the data \n");
+                int returnCode = RS232_SendBuf(com_port, (unsigned char *) dataFromReader, sizeof(packetBuffer));
+                sleepy(100);
+                bool result = store_to_memory(page_id);
+                return result;
+            } else {
+                printf("Instruction error \n");
+            }
+            return false;
+        }
+    }
+}
+
 
 bool f_reader_commands::load_template_to_char_buffer(int char_buffer_id, int page_id) {
     printf("Loading data from template page id: %i char buffer id:%i \n", page_id, char_buffer_id);
@@ -412,8 +440,8 @@ void f_reader_commands::initialize() {
     }
 }
 
-void f_reader_commands::convert(int returnCode, unsigned char tempBuf[4096], char *string) const {
-    tempBuf[returnCode] = 0;   /* always put a "null" at the end of a string! */
+void f_reader_commands::convert(int returnCode, unsigned char tempBuf[4096], char *dest) const {
+    tempBuf[returnCode] = 0;   /* always put a "null" at the end of a dest! */
     int size = returnCode;
     char converted[size * 2 + 1];
     int i;
@@ -424,13 +452,18 @@ void f_reader_commands::convert(int returnCode, unsigned char tempBuf[4096], cha
 
     printf("Response: \n");
     printf("%s\n", converted);
-    char dest[size * 2 + 1];
+    if (dest != nullptr) {
+        strncpy(dest, converted, sizeof converted);
+        dest[sizeof converted - 1] = '\0';
+    }
+
+    /*char dest[size * 2 + 1];
     strncpy(dest, converted, sizeof dest);
     dest[sizeof dest - 1] = '\0';
-
-    for (int i = 0; i < sizeof dest; i++) {
-        string[i] = dest[i];
-    }
+*/
+    /*for (int i = 0; i < sizeof dest; i++) {
+        dest[i] = dest[i];
+    }*/
     //printf("received %i bytes: %s\n", returnCode, (char *) buf);
     //printf("received %i bytes \n", returnCode);
 }

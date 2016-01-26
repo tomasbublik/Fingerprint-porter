@@ -46,7 +46,7 @@ public:
 
     void move_to_char_buffer(int round);
 
-    void convert(int returnCode, unsigned char *tempBuf, char *string) const;
+    void convert(int returnCode, unsigned char *tempBuf, char *dest) const;
 
     int timeDifference(const clock_t begin_time) const;
 
@@ -54,6 +54,7 @@ public:
 
     bool load_template_to_char_buffer(int char_buffer_id, int page_id);
 
+    bool write_template_to_reader(int page_id, unsigned char *dataFromReader);
 };
 
 

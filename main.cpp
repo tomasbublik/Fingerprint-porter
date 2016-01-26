@@ -17,19 +17,30 @@
 #include <iomanip>
 #include "sqlite3.h"
 
-bool loading_process(f_reader_commands &commandsLib, int pageId);
+bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *db, int rc);
 
-void searching_process(f_reader_commands &commandsLib);
+void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc);
 
+bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc);
+
+// Its callback function is invoked for each result row coming out of the evaluated SQL statement.
 static int callback(void *NotUsed, int argc, char **argv, char **azColName);
 
-void open_door(int result);
+static int data_callback(void *NotUsed, int argc, char **argv, char **azColName);
+
+void open_door(char *name);
 
 void get_time(const char *buffer);
 
-void select_all(sqlite3 *db, int rc);
+void select_all(sqlite3 *db, int rc, bool slaveMode);
+
+void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId);
+
+void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib);
 
 void create_db(sqlite3 *db, int rc);
+
+int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader);
 
 using namespace std;
 
@@ -84,6 +95,9 @@ int main(int argc, char *argv[]) {
     create_db(db, rc);
     f_reader_commands serial_commands = f_reader_commands(cport_nr);
 
+    if (slaveMode) {
+        synchronization_process(serial_commands, db, rc);
+    }
     char temp[2];
     while (temp[0] != 'q') {
         printf("Guide: \n");
@@ -99,7 +113,7 @@ int main(int argc, char *argv[]) {
         if (temp[0] == '1' || !masterMode) {
             printf("Entering normal mode \n");
             //cout << "Entering normal mode" << endl;
-            searching_process(serial_commands);
+            searching_process(serial_commands, db, rc);
         }
         if (temp[0] == '2') {
             printf("User management mode \n");
@@ -108,35 +122,12 @@ int main(int argc, char *argv[]) {
             cout << "Enter page ID:" << endl;*/
             int pageId;
             cin >> pageId;
-            bool success = loading_process(serial_commands, pageId);
-            if (success) {
-                printf("Enter name: \n");
-                //cout << "Enter name:" << endl;
-                string fingerName;
-                cin >> fingerName;
-
-                char *zErrMsg = 0;
-                string sql;
-                char pageIdBuff[10];
-                sprintf(pageIdBuff, "%d", pageId);
-                /* Create SQL statement */
-                sql = "INSERT OR REPLACE INTO FINGERS (ID,NAME,STATUS,DATE) "  \
-         "VALUES (" + string(pageIdBuff) + ", '" + fingerName + "', 'ACTIVE',''); ";
-
-                /* Execute SQL statement */
-                rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
-                if (rc != SQLITE_OK) {
-                    fprintf(stderr, "SQL error: %s\n", zErrMsg);
-                    sqlite3_free(zErrMsg);
-                } else {
-                    fprintf(stdout, "Records created successfully\n");
-                }
-            }
+            bool success = loading_process(serial_commands, pageId, db, rc);
         }
         if (temp[0] == '3') {
             printf("List database: \n");
             //cout << "List database:" << endl;
-            select_all(db, rc);
+            select_all(db, rc, false);
         }
         if (temp[0] == 'q') {
             sqlite3_close(db);
@@ -153,7 +144,37 @@ int main(int argc, char *argv[]) {
     return (0);
 }
 
-void select_all(sqlite3 *db, int rc) {
+int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader) {
+    printf("Enter name: \n");
+    //cout << "Enter name:" << endl;
+    string fingerName;
+    cin >> fingerName;
+
+    char *zErrMsg = 0;
+    string sql;
+    char pageIdBuff[10];
+    sprintf(pageIdBuff, "%d", pageId);
+
+    char buffer[80];
+    get_time(buffer);
+
+    /* Create SQL statement */
+    sql = "INSERT OR REPLACE INTO FINGERS (ID,NAME,STATUS,DATA, DATE) "  \
+         "VALUES (" + string(pageIdBuff) + ", '" + fingerName + "', 'ACTIVE','" + dataFromReader + "','" + buffer +
+          "'); ";
+
+    /* Execute SQL statement */
+    rc = sqlite3_exec((sqlite3 *) db, sql.c_str(), callback, 0, &zErrMsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    } else {
+        fprintf(stdout, "Records created successfully\n");
+    }
+    return rc;
+}
+
+void select_all(sqlite3 *db, int rc, bool slaveMode) {
     char *zErrMsg = 0;
     char *sql;
     const char *data = "Callback function called";
@@ -161,7 +182,11 @@ void select_all(sqlite3 *db, int rc) {
     sql = (char *) "SELECT * from FINGERS";
 
     /* Execute SQL statement */
-    rc = sqlite3_exec(db, sql, callback, (void *) data, &zErrMsg);
+    if (slaveMode) {
+        rc = sqlite3_exec(db, sql, data_callback, (void *) data, &zErrMsg);
+    } else {
+        rc = sqlite3_exec(db, sql, callback, (void *) data, &zErrMsg);
+    }
     if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
         sqlite3_free(zErrMsg);
@@ -169,6 +194,79 @@ void select_all(sqlite3 *db, int rc) {
         fprintf(stdout, "Operation done successfully\n");
     }
 }
+
+void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
+    sqlite3_stmt *res;
+
+    char *sql = "SELECT ID, NAME FROM FINGERS WHERE ID = ?";
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+
+    if (rc == SQLITE_OK) {
+        sqlite3_bind_int(res, 1, pageId);
+    } else {
+        fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    int step = sqlite3_step(res);
+
+    if (step == SQLITE_ROW) {
+        printf("%s: ", sqlite3_column_text(res, 0));
+        const unsigned char *textName = sqlite3_column_text(res, 1);
+        printf("%s\n", textName);
+        size_t length = strlen((const char *) textName) + 1;
+        strncpy(name, (const char *) textName, length);
+        name[length - 1] = '\0';
+    }
+
+    sqlite3_finalize(res);
+}
+
+
+void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
+    sqlite3_stmt *res;
+
+    //char *sql = "SELECT ID, DATA, STATUS FROM FINGERS WHERE DATE > ?";
+    char *sql = "SELECT ID, DATA, STATUS FROM FINGERS WHERE datetime(DATE) >= datetime(?)";
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+
+    if (rc == SQLITE_OK) {
+        const char *dateString = "2016-01-26T19:26:10";
+        sqlite3_bind_text(res, 1, dateString, strlen(dateString), 0);
+    } else {
+        fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    for (; ;) {
+        int step = sqlite3_step(res);
+
+        if (step == SQLITE_DONE)
+            break;
+        if (step != SQLITE_ROW) {
+            printf("error: %s!\n", sqlite3_errmsg(db));
+            break;
+        }
+
+        if (step == SQLITE_ROW) {
+            int id = sqlite3_column_int(res, 0);
+            printf("%i: ", id);
+            const unsigned char *finger_data = sqlite3_column_text(res, 1);
+            printf("%s: ", finger_data);
+            const unsigned char *status = sqlite3_column_text(res, 2);
+            printf("%s: ", status);
+
+            if (id == 2) {
+                printf("\n This is it! \n");
+                bool success = commandsLib.write_template_to_reader(id, (unsigned char *) finger_data);
+            }
+        }
+        printf("\n");
+    }
+
+    sqlite3_finalize(res);
+}
+
 
 void create_db(sqlite3 *db, int rc) {
     char *zErrMsg = 0;
@@ -178,6 +276,7 @@ void create_db(sqlite3 *db, int rc) {
              "ID INT PRIMARY KEY     NOT NULL," \
              "NAME           TEXT    NOT NULL," \
              "STATUS         TEXT," \
+                "DATA         TEXT," \
              "DATE         TEXT );";
 
     /* Execute SQL statement */
@@ -199,34 +298,51 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
     return 0;
 }
 
-void searching_process(f_reader_commands &commandsLib) {
+static int data_callback(void *NotUsed, int argc, char **argv, char **azColName) {
+    int i;
+    for (i = 0; i < argc; i++) {
+        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+    }
+    printf("\n");
+    return 0;
+}
+
+void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
     bool success = false;
     while (!success) {
         commandsLib.detect_fingerprint(1);
         int result = commandsLib.search();
         if (result != -1) {
-            open_door(result);
+            char name[200];
+            select_precise_fingerprint(db, rc, name, result);
+            open_door(name);
         }
-        //cout << endl;
-        printf("Press any key to continue. . . \n");
-        //cout << "Press any key to continue. . .\n";
-        cin.get(); //Or "getch()"
+        printf("\n ");
+        /* //cout << endl;
+         printf("\n Press any key to continue. . . \n");
+         //cout << "Press any key to continue. . .\n";
+         cin.get(); //Or "getch()"*/
     }
 }
 
-void open_door(int result) {
-    char buffer[80];
-    get_time(buffer);
-    printf("ENTRANCE|VNITRNI|%s|%i", buffer, result);
+bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
+    //It's gonna be just page id 2 to test:
+    updateNewest(db, rc, commandsLib);
+}
 
+void open_door(char *name) {
     int timing = 1000;
 #ifdef _WIN32
     //nothing to do here, it's just for RPi
+    Sleep(timing);
 #else
     system("echo 0 > /sys/class/gpio/gpio26/value");
     usleep(timing*1000);  /* sleep for 100 milliSeconds */
     system("echo 1 > /sys/class/gpio/gpio26/value");
 #endif
+    char buffer[80];
+    get_time(buffer);
+    printf("ENTRANCE|VNITRNI|%s|%s", buffer, name);
 }
 
 void get_time(const char *buffer) {
@@ -240,7 +356,7 @@ void get_time(const char *buffer) {
     strftime((char *) buffer, 80, "%Y-%m-%dT%H:%M:%S", timeInfo);
 }
 
-bool loading_process(f_reader_commands &commandsLib, int pageId) {
+bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *db, int rc) {
     bool success = false;
     while (!success) {
         commandsLib.detect_fingerprint(1);
@@ -256,14 +372,15 @@ bool loading_process(f_reader_commands &commandsLib, int pageId) {
 
         if (resultMatching) {
             success = commandsLib.store_to_memory(pageId);
+            char dataFromReader[2000];
+            commandsLib.read_template_from_char_buffer(1, dataFromReader);
+            printf("Data from reader: %s \n", dataFromReader);
+
+            rc = saveToDb(db, rc, pageId, dataFromReader);
+
         } else {
             commandsLib.search();
         }
-
-        char dataFromReader[2000];
-        commandsLib.read_template_from_char_buffer(1, dataFromReader);
-        printf("Data from reader: %s \n", dataFromReader);
-
 
         printf("Press any key to continue. . . \n");
         //cout << "Press any key to continue. . .\n";
