@@ -81,6 +81,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Opened database successfully\n");
     }
 
+    create_db(db, rc);
     f_reader_commands serial_commands = f_reader_commands(cport_nr);
 
     char temp[2];
@@ -258,6 +259,12 @@ bool loading_process(f_reader_commands &commandsLib, int pageId) {
         } else {
             commandsLib.search();
         }
+
+        char dataFromReader[2000];
+        commandsLib.read_template_from_char_buffer(1, dataFromReader);
+        printf("Data from reader: %s \n", dataFromReader);
+
+
         printf("Press any key to continue. . . \n");
         //cout << "Press any key to continue. . .\n";
 
