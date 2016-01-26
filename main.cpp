@@ -26,13 +26,11 @@ bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc
 // Its callback function is invoked for each result row coming out of the evaluated SQL statement.
 static int callback(void *NotUsed, int argc, char **argv, char **azColName);
 
-static int data_callback(void *NotUsed, int argc, char **argv, char **azColName);
-
 void open_door(char *name);
 
 void get_time(const char *buffer);
 
-void select_all(sqlite3 *db, int rc, bool slaveMode);
+void select_all(sqlite3 *db, int rc);
 
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId);
 
@@ -127,7 +125,7 @@ int main(int argc, char *argv[]) {
         if (temp[0] == '3') {
             printf("List database: \n");
             //cout << "List database:" << endl;
-            select_all(db, rc, false);
+            select_all(db, rc);
         }
         if (temp[0] == 'q') {
             sqlite3_close(db);
@@ -159,7 +157,7 @@ int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader) {
     get_time(buffer);
 
     /* Create SQL statement */
-    sql = "INSERT OR REPLACE INTO FINGERS (ID,NAME,STATUS,DATA, DATE) "  \
+    sql = "INSERT OR REPLACE INTO FINGERS (ID, NAME, STATUS, DATA, DATE) "  \
          "VALUES (" + string(pageIdBuff) + ", '" + fingerName + "', 'ACTIVE','" + dataFromReader + "','" + buffer +
           "'); ";
 
@@ -174,7 +172,7 @@ int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader) {
     return rc;
 }
 
-void select_all(sqlite3 *db, int rc, bool slaveMode) {
+void select_all(sqlite3 *db, int rc) {
     char *zErrMsg = 0;
     char *sql;
     const char *data = "Callback function called";
@@ -182,11 +180,7 @@ void select_all(sqlite3 *db, int rc, bool slaveMode) {
     sql = (char *) "SELECT * from FINGERS";
 
     /* Execute SQL statement */
-    if (slaveMode) {
-        rc = sqlite3_exec(db, sql, data_callback, (void *) data, &zErrMsg);
-    } else {
-        rc = sqlite3_exec(db, sql, callback, (void *) data, &zErrMsg);
-    }
+    rc = sqlite3_exec(db, sql, callback, (void *) data, &zErrMsg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
         sqlite3_free(zErrMsg);
@@ -198,7 +192,7 @@ void select_all(sqlite3 *db, int rc, bool slaveMode) {
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
     sqlite3_stmt *res;
 
-    char *sql = "SELECT ID, NAME FROM FINGERS WHERE ID = ?";
+    char *sql = (char *) "SELECT ID, NAME FROM FINGERS WHERE ID = ?";
 
     rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
 
@@ -227,7 +221,7 @@ void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
     sqlite3_stmt *res;
 
     //char *sql = "SELECT ID, DATA, STATUS FROM FINGERS WHERE DATE > ?";
-    char *sql = "SELECT ID, DATA, STATUS FROM FINGERS WHERE datetime(DATE) >= datetime(?)";
+    char *sql = (char *) "SELECT ID, DATA, STATUS FROM FINGERS WHERE datetime(DATE) >= datetime(?)";
 
     rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
 
@@ -290,15 +284,6 @@ void create_db(sqlite3 *db, int rc) {
 }
 
 static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
-    int i;
-    for (i = 0; i < argc; i++) {
-        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-    }
-    printf("\n");
-    return 0;
-}
-
-static int data_callback(void *NotUsed, int argc, char **argv, char **azColName) {
     int i;
     for (i = 0; i < argc; i++) {
         printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
