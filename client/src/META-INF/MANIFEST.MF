@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Class-Path: annotations-java8.jar pi4j-core.jar junit-4.12.jar hamcres
+ t-core-1.3.jar pi4j-core-javadoc.jar pi4j-core-sources.jar sqlite-jdb
+ c-3.7.2.jar pi4j-gpio-extension.jar pi4j-gpio-extension-javadoc.jar p
+ i4j-gpio-extension-sources.jar client.jar
+Main-Class: Porter
+
