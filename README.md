@@ -1,2 +1,3 @@
-# Fingerprint-porter
-The C sources controlling two Adafruit's fingerprint reader readers
+# Fingerprint porter & attendance system
+
+![Alt text](overview.png "Optional title")
