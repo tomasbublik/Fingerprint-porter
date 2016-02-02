@@ -10,6 +10,12 @@
 
 #define FINGERPRINT_STARTCODE 0xEF01
 
+static const int HEADER_HIGH = 0xEF;
+static const int HEADER_LOW = 0x01;
+
+static const uint32_t READER_ADDRESS = 0xFFFFFFFF;
+
+static const int PACKAGE_IDENTIFIER = 0x01;
 using namespace std;
 
 class f_reader_commands {
@@ -45,6 +51,12 @@ public:
     void sleepy(unsigned long timing);
 
     void move_to_char_buffer(int round);
+
+    void delete_all_fingers();
+
+    bool read_notepad(char *data_from_notepad);
+
+    bool write_notepad(unsigned char *data_to_notepad);
 
     void convert(int returnCode, unsigned char *tempBuf, char *dest) const;
 

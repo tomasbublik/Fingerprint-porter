@@ -17,6 +17,7 @@
 #include <iomanip>
 #include "sqlite3.h"
 
+
 bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *db, int rc);
 
 void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc);
@@ -32,6 +33,8 @@ void get_time(const char *buffer);
 
 void select_all(sqlite3 *db, int rc);
 
+void delete_all(sqlite3 *db, int rc, f_reader_commands &commandsLib);
+
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId);
 
 void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib);
@@ -39,6 +42,12 @@ void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib);
 void create_db(sqlite3 *db, int rc);
 
 int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader);
+
+uint8_t*
+hex_decode(const char *in, size_t len,uint8_t *out)
+;
+
+int hex_to_ascii(char c, char d);
 
 using namespace std;
 
@@ -101,10 +110,8 @@ int main(int argc, char *argv[]) {
         printf("Guide: \n");
         //cout << "Guide:" << endl;
         if (masterMode) {
-            printf("(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit \n");
-            //cout << "(1) for operating mode, (2) for user management mode, (3) for database list, (q) for quit" << endl;
-
-            //cin >> temp;
+            printf("(1) for operating mode, (2) for user management mode, (3) for database list, \n "
+                           "(4) to delete all, (q) for quit \n");
             scanf("%s", temp);
         }
 
@@ -126,6 +133,10 @@ int main(int argc, char *argv[]) {
             printf("List database: \n");
             //cout << "List database:" << endl;
             select_all(db, rc);
+        }
+        if (temp[0] == '4') {
+            printf("Erase fingerprint memory: \n");
+            delete_all(db, rc, serial_commands);
         }
         if (temp[0] == 'q') {
             sqlite3_close(db);
@@ -189,6 +200,25 @@ void select_all(sqlite3 *db, int rc) {
     }
 }
 
+void delete_all(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
+    commandsLib.delete_all_fingers();
+
+    char *zErrMsg = 0;
+    char *sql;
+    const char *data = "Callback function called";
+    /* Create SQL statement */
+    sql = (char *) "UPDATE FINGERS SET STATUS='DELETED'";
+
+    /* Execute SQL statement */
+    rc = sqlite3_exec(db, sql, callback, (void *) data, &zErrMsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    } else {
+        fprintf(stdout, "Operation done successfully\n");
+    }
+}
+
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
     sqlite3_stmt *res;
 
@@ -210,6 +240,10 @@ void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
         printf("%s\n", textName);
         size_t length = strlen((const char *) textName) + 1;
         strncpy(name, (const char *) textName, length);
+        name[length - 1] = '\0';
+    } else {
+        size_t length = 8;
+        strncpy(name, "Unknown", length);
         name[length - 1] = '\0';
     }
 
@@ -311,8 +345,39 @@ void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
 }
 
 bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
+    char data_from_reader[19];
+
+    commandsLib.read_notepad(data_from_reader);
+
     //It's gonna be just page id 2 to test:
     updateNewest(db, rc, commandsLib);
+
+    char buffer[80];
+    get_time(buffer);
+    uint8_t res[7];
+    hex_decode(buffer,strlen(buffer),res);
+    //printf("%s", res);
+
+    commandsLib.write_notepad(res);
+}
+
+uint8_t*
+hex_decode(const char *in, size_t len,uint8_t *out)
+{
+    unsigned int i, t, hn, ln;
+    for (t = 0,i = 0; i < len; i+=2,++t) {
+        if (in[i] == 'T' |in[i] == '-' |in[i] == ':' ) {
+            t--;
+            i--;
+            continue;
+        }
+        hn = in[i] > '9' ? in[i] - 'A' + 10 : in[i] - '0';
+        ln = in[i+1] > '9' ? in[i+1] - 'A' + 10 : in[i+1] - '0';
+
+        out[t] = (hn << 4 ) | ln;
+    }
+
+    return out;
 }
 
 void open_door(char *name) {
