@@ -29,7 +29,7 @@ void f_reader_commands::print_system_parameters() {
         if (returnCode > 0) {
             printf("Time execution in ms: %d \n", timeDifference(begin_time));
             //cout << "ms time execution: " << float(clock() - begin_time) / CLOCKS_PER_SEC << endl;
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             return;
         }
@@ -54,7 +54,7 @@ void f_reader_commands::detect_fingerprint(int round) {
             if (returnCode > 0) {
                 //0x02 means cannot detect finger
                 if (buf[9] != 0x02) {
-                    char *converted = nullptr;
+                    char *converted = NULL;
                     convert(returnCode, buf, converted);
                     printf("%s\n", "Successfully loaded into image buffer");
                     //0x00 means success read into imgBuffer
@@ -96,7 +96,7 @@ void f_reader_commands::move_to_char_buffer(int round) {
         if (returnCode > 0) {
             printf("Time execution in ms: %d \n", timeDifference(begin_time));
             //cout << "ms time execution: " << float(clock() - begin_time) / CLOCKS_PER_SEC << endl;
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             printf("Result of round number: %d \n", round);
             //cout << "Vysledek z kola: " << round << endl;
@@ -126,7 +126,7 @@ void f_reader_commands::delete_all_fingers() {
     while (1) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("All the fingeprint records were removed \n");
@@ -154,7 +154,7 @@ bool f_reader_commands::match_both_characters_file_to_template() {
     while (1) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("Positive \n");
@@ -226,7 +226,7 @@ bool f_reader_commands::write_template_to_reader(int page_id, unsigned char *dat
         sleepy(10);
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("Going to store the data \n");
@@ -267,7 +267,7 @@ bool f_reader_commands::load_template_to_char_buffer(int char_buffer_id, int pag
         sleepy(10);
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("Successfully loaded \n");
@@ -305,13 +305,51 @@ bool f_reader_commands::store_to_memory(int page_id) {
     while (1) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] != 0x00) {
                 printf("Error. Not saved. \n");
                 //cout << "Error. Not saved." << endl;
             } else {
                 printf("Saved successfully \n");
+                //cout << "Ulozeno" << endl;
+                return true;
+            }
+            return false;
+        }
+        sleepy(10);
+    }
+}
+
+bool f_reader_commands::delete_one_finger(int page_id) {
+    cout << "The template with page id: " << page_id << " will be deleted" << endl;
+
+    unsigned char pageIdBytes[2];
+    pageIdBytes[0] = (unsigned char) ((page_id >> 8) & 0xFF);
+    pageIdBytes[1] = (unsigned char) (page_id & 0xFF);
+
+    int checksum = PACKAGE_IDENTIFIER + 0x07 + 0x0C + pageIdBytes[0] + pageIdBytes[1] + 0x01;
+    unsigned char checksumBytes[2];
+    checksumBytes[0] = (unsigned char) ((checksum >> 8) & 0xFF);
+    checksumBytes[1] = (unsigned char) (checksum & 0xFF);
+
+    unsigned char packetBuffer[] = {HEADER_HIGH, HEADER_LOW, READER_ADDRESS & 0xFF, (READER_ADDRESS >> 8) & 0xFF,
+                                    (READER_ADDRESS >> 16) & 0xFF, (READER_ADDRESS >> 24) & 0xFF, PACKAGE_IDENTIFIER,
+                                    0x00, 0x07,
+                                    0x0C, pageIdBytes[0], pageIdBytes[1], 0x00, 0x01, checksumBytes[0], checksumBytes[1]};
+
+    int returnCode = RS232_SendBuf(com_port, packetBuffer, sizeof(packetBuffer));
+    memset(&buf[0], 0, sizeof(buf));
+    while (1) {
+        returnCode = RS232_PollComport(com_port, buf, 4095);
+        if (returnCode > 0) {
+            char *converted = NULL;
+            convert(returnCode, buf, converted);
+            if (buf[9] != 0x00) {
+                printf("Error. Cannot be deleted. \n");
+                //cout << "Error. Not saved." << endl;
+            } else {
+                printf("Deleted successfully \n");
                 //cout << "Ulozeno" << endl;
                 return true;
             }
@@ -379,7 +417,7 @@ int f_reader_commands::search() {
         if (returnCode > 0) {
             printf("Time execution in ms: %d \n", timeDifference(begin_time));
             //cout << "ms time execution: " << time << endl;
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x09) {
                 printf("Not found \n");
@@ -421,7 +459,7 @@ void f_reader_commands::handshake() {
     while (1) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             printf("Handshake response: \n");
             //cout << "Handshake response: " << endl;
@@ -528,7 +566,7 @@ void f_reader_commands::convert(int returnCode, unsigned char tempBuf[4096], cha
 
     printf("Response: \n");
     printf("%s\n", converted);
-    if (dest != nullptr) {
+    if (dest != NULL) {
         strncpy(dest, converted, sizeof converted);
         dest[sizeof converted - 1] = '\0';
     }
@@ -633,7 +671,7 @@ bool f_reader_commands::write_notepad(unsigned char *data_to_notepad) {
         sleepy(100);
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            char *converted = nullptr;
+            char *converted = NULL;
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("Successfully written \n");

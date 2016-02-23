@@ -7,6 +7,7 @@
 
 #include <time.h>
 #include <iostream>
+#include <stdint.h>
 
 #define FINGERPRINT_STARTCODE 0xEF01
 
@@ -67,6 +68,8 @@ public:
     bool load_template_to_char_buffer(int char_buffer_id, int page_id);
 
     bool write_template_to_reader(int page_id, unsigned char *dataFromReader);
+
+    bool delete_one_finger(int page_id);
 };
 
 

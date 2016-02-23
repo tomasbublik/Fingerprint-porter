@@ -37,15 +37,18 @@ void delete_all(sqlite3 *db, int rc, f_reader_commands &commandsLib);
 
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId);
 
-void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib);
+void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib, char *dateString);
 
 void create_db(sqlite3 *db, int rc);
 
 int saveToDb(const sqlite3 *db, int rc, int pageId, char *dataFromReader);
 
-uint8_t*
-hex_decode(const char *in, size_t len,uint8_t *out)
-;
+bool removing_process(f_reader_commands &commandsLib, int pageId, sqlite3 *db, int rc);
+
+void delete_one(sqlite3 *db, int rc, int pageId);
+
+uint8_t *
+        hex_decode(const char *in, size_t len, uint8_t *out);
 
 int hex_to_ascii(char c, char d);
 
@@ -110,8 +113,8 @@ int main(int argc, char *argv[]) {
         printf("Guide: \n");
         //cout << "Guide:" << endl;
         if (masterMode) {
-            printf("(1) for operating mode, (2) for user management mode, (3) for database list, \n "
-                           "(4) to delete all, (q) for quit \n");
+            printf("(1) for operating mode, (2) to set user, (3) to delete user, \n "
+                           "(4) to delete all, (5) for database list, (q) for quit \n");
             scanf("%s", temp);
         }
 
@@ -121,7 +124,7 @@ int main(int argc, char *argv[]) {
             searching_process(serial_commands, db, rc);
         }
         if (temp[0] == '2') {
-            printf("User management mode \n");
+            printf("User setting mode \n");
             printf("Enter page ID: \n");
             /*cout << "User management mode" << endl;
             cout << "Enter page ID:" << endl;*/
@@ -130,6 +133,15 @@ int main(int argc, char *argv[]) {
             bool success = loading_process(serial_commands, pageId, db, rc);
         }
         if (temp[0] == '3') {
+            printf("User delete mode \n");
+            printf("Enter page ID: \n");
+            /*cout << "User management mode" << endl;
+            cout << "Enter page ID:" << endl;*/
+            int pageId;
+            cin >> pageId;
+            bool success = removing_process(serial_commands, pageId, db, rc);
+        }
+        if (temp[0] == '5') {
             printf("List database: \n");
             //cout << "List database:" << endl;
             select_all(db, rc);
@@ -219,6 +231,20 @@ void delete_all(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
     }
 }
 
+void delete_one(sqlite3 *db, int rc, int pageId) {
+    sqlite3_stmt *res;
+    /* Create SQL statement */
+    char *sql = (char *) "UPDATE FINGERS SET STATUS='DELETED', DATA='' WHERE ID = ?";
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+
+    if (rc == SQLITE_OK) {
+        sqlite3_bind_int(res, 1, pageId);
+    } else {
+        fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
+    }
+}
+
 void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
     sqlite3_stmt *res;
 
@@ -251,17 +277,22 @@ void select_precise_fingerprint(sqlite3 *db, int rc, char *name, int pageId) {
 }
 
 
-void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
+void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib, char *dateString) {
     sqlite3_stmt *res;
 
     //char *sql = "SELECT ID, DATA, STATUS FROM FINGERS WHERE DATE > ?";
     char *sql = (char *) "SELECT ID, DATA, STATUS FROM FINGERS WHERE datetime(DATE) >= datetime(?)";
 
     rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+//TODO - no idea how to preserve the dateString value otherwise!!!
+    char name[20];
+    size_t length = 20;
+    strncpy(name, (const char *) dateString, 19);
+    name[length - 1] = '\0';
 
     if (rc == SQLITE_OK) {
-        const char *dateString = "2016-01-26T19:26:10";
-        sqlite3_bind_text(res, 1, dateString, strlen(dateString), 0);
+        //const char *dateString = "2016-01-26T19:26:10";
+        sqlite3_bind_text(res, 1, name, strlen(name), 0);
     } else {
         fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
     }
@@ -284,10 +315,14 @@ void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib) {
             const unsigned char *status = sqlite3_column_text(res, 2);
             printf("%s: ", status);
 
-            if (id == 2) {
-                printf("\n This is it! \n");
+            if (0 == strcmp("DELETED", (const char *) status)) {
+                printf("\n Going to remove the newly deleted user with ID: %i \n", id);
+                bool success = removing_process(commandsLib, id, db, rc);
+            } else {
+                printf("\n Going to write the newly added user with ID: %i \n", id);
                 bool success = commandsLib.write_template_to_reader(id, (unsigned char *) finger_data);
             }
+
         }
         printf("\n");
     }
@@ -345,36 +380,35 @@ void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
 }
 
 bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
-    char data_from_reader[19];
+    char date_from_reader[19];
 
-    commandsLib.read_notepad(data_from_reader);
+    commandsLib.read_notepad(date_from_reader);
 
     //It's gonna be just page id 2 to test:
-    updateNewest(db, rc, commandsLib);
+    updateNewest(db, rc, commandsLib, date_from_reader);
 
     char buffer[80];
     get_time(buffer);
     uint8_t res[7];
-    hex_decode(buffer,strlen(buffer),res);
+    hex_decode(buffer, strlen(buffer), res);
     //printf("%s", res);
 
     commandsLib.write_notepad(res);
 }
 
-uint8_t*
-hex_decode(const char *in, size_t len,uint8_t *out)
-{
+uint8_t *
+hex_decode(const char *in, size_t len, uint8_t *out) {
     unsigned int i, t, hn, ln;
-    for (t = 0,i = 0; i < len; i+=2,++t) {
-        if (in[i] == 'T' |in[i] == '-' |in[i] == ':' ) {
+    for (t = 0, i = 0; i < len; i += 2, ++t) {
+        if (in[i] == 'T' | in[i] == '-' | in[i] == ':') {
             t--;
             i--;
             continue;
         }
         hn = in[i] > '9' ? in[i] - 'A' + 10 : in[i] - '0';
-        ln = in[i+1] > '9' ? in[i+1] - 'A' + 10 : in[i+1] - '0';
+        ln = in[i + 1] > '9' ? in[i + 1] - 'A' + 10 : in[i + 1] - '0';
 
-        out[t] = (hn << 4 ) | ln;
+        out[t] = (hn << 4) | ln;
     }
 
     return out;
@@ -438,4 +472,14 @@ bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *
     }
     return success;
 }
+
+bool removing_process(f_reader_commands &commandsLib, int pageId, sqlite3 *db, int rc) {
+    printf("Removing from database. \n");
+    commandsLib.delete_one_finger(pageId);
+
+    delete_one(db, rc, pageId);
+
+    return true;
+}
+
 
