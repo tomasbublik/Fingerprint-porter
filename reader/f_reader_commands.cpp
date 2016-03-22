@@ -625,6 +625,7 @@ bool f_reader_commands::read_notepad(char *data_from_notepad) {
                 data_from_notepad[16] = ':';
                 data_from_notepad[17] = converted[32];
                 data_from_notepad[18] = converted[33];
+                data_from_notepad[19] = '\0';
                 return true;
             } else {
                 printf("Instruction error \n");

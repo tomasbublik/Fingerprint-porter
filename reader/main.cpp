@@ -380,7 +380,7 @@ void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
 }
 
 bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
-    char date_from_reader[19];
+    char date_from_reader[20];
 
     commandsLib.read_notepad(date_from_reader);
 
