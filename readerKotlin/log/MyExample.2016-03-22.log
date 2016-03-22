@@ -1,0 +1,13 @@
+20:49:02.640 [main] DEBUG chapters.introduction.HelloWorld1 - Hello world.
+20:58:42.307 [main] DEBUG chapters.introduction.HelloWorld1 - Hello world.
+21:12:02.523 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+21:49:45.765 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+21:51:11.445 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+21:52:13.968 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+21:52:54.400 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:25:28.218 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:25:40.266 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:30:39.135 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:34:35.363 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:34:43.910 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
+22:35:19.587 [main] DEBUG cz.bublik.fingerprint.reader.MainKt - Hello world.
