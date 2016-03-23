@@ -285,14 +285,14 @@ void updateNewest(sqlite3 *db, int rc, f_reader_commands &commandsLib, char *dat
 
     rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
 //TODO - no idea how to preserve the dateString value otherwise!!!
-    char name[20];
+    /*char name[20];
     size_t length = 20;
     strncpy(name, (const char *) dateString, 19);
     name[length - 1] = '\0';
-
+*/
     if (rc == SQLITE_OK) {
         //const char *dateString = "2016-01-26T19:26:10";
-        sqlite3_bind_text(res, 1, name, strlen(name), 0);
+        sqlite3_bind_text(res, 1, dateString, strlen(dateString), 0);
     } else {
         fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
     }
@@ -462,10 +462,10 @@ bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *
 
             rc = saveToDb(db, rc, pageId, dataFromReader);
 
-        } else {
+        } /*else {
             commandsLib.search();
         }
-
+*/
         printf("Press any key to continue. . . \n");
         //cout << "Press any key to continue. . .\n";
 
