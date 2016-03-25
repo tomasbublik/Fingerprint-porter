@@ -47,33 +47,47 @@ void f_reader_commands::detect_fingerprint(int round) {
                                     0x05};
     cout << "Reading fingerprint into chr buffer no.: " << round << "..." << endl;
     memset(&buf[0], 0, sizeof(buf));
+    clock_t begin_time = clock();
+    int returnCode1 = 0;
     while (1) {
         int returnCode = RS232_SendBuf(com_port, packetBuffer, sizeof(packetBuffer));
+        begin_time = clock();
         while (1) {
-            returnCode = RS232_PollComport(com_port, buf, 4095);
-            if (returnCode > 0) {
+            sleepy(40);
+            returnCode1 = RS232_PollComport(com_port, buf, 4095);
+            if (returnCode1 > 0) {
                 //0x02 means cannot detect finger
                 if (buf[9] != 0x02) {
                     char *converted = NULL;
-                    convert(returnCode, buf, converted);
+                    convert(returnCode1, buf, converted);
                     printf("%s\n", "Successfully loaded into image buffer");
                     //0x00 means success read into imgBuffer
                     if (buf[9] == 0x00) {
+                        printf("Time execution of fingerprint detection in ms: %d \n", timeDifference(begin_time));
+                        memset(&buf[0], 0, sizeof(buf));
                         move_to_char_buffer(round);
                         return;
                     } else {
                         if (buf[9] == 0x01) {
                             memset(&buf[0], 0, sizeof(buf));
                             printf("%s\n", "Error when receiving package");
+                            returnCode1 = 0;
+                            break;
+                        }
+                        if (buf[9] == 0x03) {
+                            memset(&buf[0], 0, sizeof(buf));
+                            printf("%s\n", "Fail to collect finger");
+                            returnCode1 = 0;
                             break;
                         }
                     }
                 } else {
+                    memset(&buf[0], 0, sizeof(buf));
+                    returnCode1 = 0;
                     //Finger wasn't detected, lest try it repeatedly
                     break;
                 }
             }
-            sleepy(40);
         }
         sleepy(200);
     }
@@ -89,12 +103,12 @@ void f_reader_commands::move_to_char_buffer(int round) {
                                     (unsigned char) round, 0x00,
                                     (unsigned char) (0x01 + 0x04 + 0x02 + round)};
     const clock_t begin_time = clock();
-    int returnCode = RS232_SendBuf(com_port, packetBuffer, sizeof(packetBuffer));
     memset(&buf[0], 0, sizeof(buf));
+    int returnCode = RS232_SendBuf(com_port, packetBuffer, sizeof(packetBuffer));
     while (1) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
-            printf("Time execution in ms: %d \n", timeDifference(begin_time));
+            printf("Time execution of saving image in ms: %d \n", timeDifference(begin_time));
             //cout << "ms time execution: " << float(clock() - begin_time) / CLOCKS_PER_SEC << endl;
             char *converted = NULL;
             convert(returnCode, buf, converted);
@@ -109,7 +123,7 @@ void f_reader_commands::move_to_char_buffer(int round) {
             }
             return;
         }
-        memset(&buf[0], 0, sizeof(buf));
+        //memset(&buf[0], 0, sizeof(buf));
         sleepy(10);
     }
 }
