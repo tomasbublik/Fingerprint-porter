@@ -109,17 +109,13 @@ void f_reader_commands::move_to_char_buffer(int round) {
         returnCode = RS232_PollComport(com_port, buf, 4095);
         if (returnCode > 0) {
             printf("Time execution of saving image in ms: %d \n", timeDifference(begin_time));
-            //cout << "ms time execution: " << float(clock() - begin_time) / CLOCKS_PER_SEC << endl;
             char *converted = NULL;
             convert(returnCode, buf, converted);
             printf("Result of round number: %d \n", round);
-            //cout << "Vysledek z kola: " << round << endl;
             if (buf[9] != 0x00) {
                 printf("Bad :-( \n");
-                //cout << "Spatny :-(" << endl;
             } else {
                 printf("OK :-) \n");
-                //cout << "To by slo:-)" << endl;
             }
             return;
         }
@@ -172,11 +168,9 @@ bool f_reader_commands::match_both_characters_file_to_template() {
             convert(returnCode, buf, converted);
             if (buf[9] == 0x00) {
                 printf("Positive \n");
-                //cout << "Pozitivni" << endl;
                 return true;
             } else {
                 printf("Unfortunately, must be repeated \n");
-                //cout << "Bohuzel, je nutne opakovat" << endl;
                 return false;
             }
         }
@@ -323,10 +317,8 @@ bool f_reader_commands::store_to_memory(int page_id) {
             convert(returnCode, buf, converted);
             if (buf[9] != 0x00) {
                 printf("Error. Not saved. \n");
-                //cout << "Error. Not saved." << endl;
             } else {
                 printf("Saved successfully \n");
-                //cout << "Ulozeno" << endl;
                 return true;
             }
             return false;
@@ -398,12 +390,10 @@ void f_reader_commands::upload_char(int id) {
             for (i = 0; i < size; i++) {
                 sprintf(&converted[i * 2], "%02X", buf[i]);
             }
-            printf("Char data: \n");
-            //cout << "Char data: " << endl;
-            printf("%s\n", converted);
+            //printf("Char data: \n");
+            //printf("%s\n", converted);
 
-            //printf("received %i bytes: %s\n", returnCode, (char *) buf);
-            printf("received %i bytes \n", returnCode);
+            //printf("received %i bytes \n", returnCode);
             return;
         }
         sleepy(10);

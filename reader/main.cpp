@@ -4,30 +4,26 @@
 
 #include <Windows.h>
 
-#include <conio.h>
-
 #else
 #include <unistd.h>
 #endif
 
 #include "rs232.h"
 #include "f_reader_commands.h"
-#include <time.h>
-#include <stdlib.h>
 #include <iomanip>
 #include "sqlite3.h"
 
 
 bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *db, int rc);
 
-void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc);
+void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc, char *type);
 
 bool synchronization_process(f_reader_commands &commandsLib, sqlite3 *db, int rc);
 
 // Its callback function is invoked for each result row coming out of the evaluated SQL statement.
 static int callback(void *NotUsed, int argc, char **argv, char **azColName);
 
-void open_door(char *name);
+void open_door(char *name, char *type);
 
 void get_time(const char *buffer);
 
@@ -54,36 +50,45 @@ int hex_to_ascii(char c, char d);
 
 using namespace std;
 
+/**
+ * Running with following arguments:
+ * <port_number> <type> <master_or_slave_mode>
+ *
+ * <port_number> if from: doc.txt
+ * <type> String identification of the reader
+ * <master_or_slave_mode> optional definition for user management console in the case of MASTER mode
+ * or synchronization process in the case of SLAVE mode
+ */
 int main(int argc, char *argv[]) {
     int i, n,
             cport_nr = 1,        /* /dev/ttyS0 (COM1 on windows) */
             bdrate = 115200;       /* 115200 baud */
     bool slaveMode = false; /*Only slave mode of program can synchronize with database before start*/
     bool masterMode = false; /*Only master mode of program can write to database and manage users*/
+    char type[20] = "0000000\0";
 
-    if (argc >= 2) {
+    if (argc >= 3 && argc < 5) {
         cport_nr = atoi(argv[1]);
         printf("This program runs with following port: %s \n", argv[1]);
-        //cout << "This program runs with following port: " << argv[1] << endl;
-        if (argc == 3) {
-            if (0 == strcmp("SLAVE", argv[2])) {
+        if (argc == 4) {
+            if (0 == strcmp("SLAVE", argv[3])) {
                 cout << "Running in SLAVE mode" << endl;
                 slaveMode = true;
             }
-            if (0 == strcmp("MASTER", argv[2])) {
+            if (0 == strcmp("MASTER", argv[3])) {
                 cout << "Running in MASTER mode" << endl;
                 masterMode = true;
             }
         }
-    } else if (argc > 3) {
+        strcpy(type, argv[2]);
+        //type[sizeof argv[2]] = '\0';
+    } else if (argc > 4) {
         printf("Too many arguments supplied.\n");
     }
     else {
         printf("Warning, this program runs with default COM2 on Windows or ttyS1 on Linux \n");
-        //cout << "Warning, this program runs with default COM2 on Windows or ttyS1 on Linux" << endl;
     }
     char mode[] = {'8', 'N', '1', 0};
-
 
     if (RS232_OpenComport(cport_nr, bdrate, mode)) {
         printf("Can not open com port\n");
@@ -92,7 +97,6 @@ int main(int argc, char *argv[]) {
 
     sqlite3 *db;
     int rc;
-
 
     rc = sqlite3_open("finger.db", &db);
     if (rc) {
@@ -111,7 +115,6 @@ int main(int argc, char *argv[]) {
     char temp[2];
     while (temp[0] != 'q') {
         printf("Guide: \n");
-        //cout << "Guide:" << endl;
         if (masterMode) {
             printf("(1) for operating mode, (2) to set user, (3) to delete user, \n "
                            "(4) to delete all, (5) for database list, (q) for quit \n");
@@ -120,30 +123,26 @@ int main(int argc, char *argv[]) {
 
         if (temp[0] == '1' || !masterMode) {
             printf("Entering normal mode \n");
-            //cout << "Entering normal mode" << endl;
-            searching_process(serial_commands, db, rc);
+            searching_process(serial_commands, db, rc, type);
         }
         if (temp[0] == '2') {
             printf("User setting mode \n");
             printf("Enter page ID: \n");
-            /*cout << "User management mode" << endl;
-            cout << "Enter page ID:" << endl;*/
             int pageId;
-            cin >> pageId;
+            scanf("%d", &pageId);
+            //Because scanf() ignores the trailing newline
+            getchar();
             bool success = loading_process(serial_commands, pageId, db, rc);
         }
         if (temp[0] == '3') {
             printf("User delete mode \n");
             printf("Enter page ID: \n");
-            /*cout << "User management mode" << endl;
-            cout << "Enter page ID:" << endl;*/
             int pageId;
             cin >> pageId;
             bool success = removing_process(serial_commands, pageId, db, rc);
         }
         if (temp[0] == '5') {
             printf("List database: \n");
-            //cout << "List database:" << endl;
             select_all(db, rc);
         }
         if (temp[0] == '4') {
@@ -153,7 +152,8 @@ int main(int argc, char *argv[]) {
         if (temp[0] == 'q') {
             sqlite3_close(db);
             printf("Exiting: \n");
-            //cout << "Exiting" << endl;
+        } else {
+            temp[0] = (char) 'a';
         }
     }
 
@@ -361,7 +361,7 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
     return 0;
 }
 
-void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
+void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc, char *type) {
     bool success = false;
     while (!success) {
         commandsLib.detect_fingerprint(1);
@@ -369,7 +369,7 @@ void searching_process(f_reader_commands &commandsLib, sqlite3 *db, int rc) {
         if (result != -1) {
             char name[200];
             select_precise_fingerprint(db, rc, name, result);
-            open_door(name);
+            open_door(name, type);
         }
         printf("\n ");
         /* //cout << endl;
@@ -414,8 +414,8 @@ hex_decode(const char *in, size_t len, uint8_t *out) {
     return out;
 }
 
-void open_door(char *name) {
-    int timing = 1000;
+void open_door(char *name, char *type) {
+    int timing = 2000;
 #ifdef _WIN32
     //nothing to do here, it's just for RPi
     Sleep(timing);
@@ -426,7 +426,7 @@ void open_door(char *name) {
 #endif
     char buffer[80];
     get_time(buffer);
-    printf("ENTRANCE|VNITRNI|%s|%s", buffer, name);
+    printf("ENTRANCE|%s|%s|%s", type, buffer, name);
 }
 
 void get_time(const char *buffer) {
@@ -441,36 +441,36 @@ void get_time(const char *buffer) {
 }
 
 bool loading_process(f_reader_commands &commandsLib, int pageId, const sqlite3 *db, int rc) {
-    bool success = false;
-    while (!success) {
+    char temp[2];
+    temp[0] = 'a';
+    while (temp[0] != '1') {
         commandsLib.detect_fingerprint(1);
-        commandsLib.upload_char(1);
+        //commandsLib.upload_char(1);
         printf("Press any key to continue. . . \n");
-        //cout << "Press any key to continue. . .\n";
+        getchar();
 
-        cin.get(); //Or "getch()"
         commandsLib.detect_fingerprint(2);
         //commandsLib.upload_char(1);
 
         bool resultMatching = commandsLib.match_both_characters_file_to_template();
 
         if (resultMatching) {
-            success = commandsLib.store_to_memory(pageId);
-            char dataFromReader[2000];
-            commandsLib.read_template_from_char_buffer(1, dataFromReader);
-            printf("Data from reader: %s \n", dataFromReader);
+            bool storeSuccess = commandsLib.store_to_memory(pageId);
+            if (storeSuccess) {
+                char dataFromReader[2000];
+                commandsLib.read_template_from_char_buffer(1, dataFromReader);
+                printf("Data from reader: %s \n", dataFromReader);
 
-            rc = saveToDb(db, rc, pageId, dataFromReader);
-
-        } /*else {
-            commandsLib.search();
+                rc = saveToDb(db, rc, pageId, dataFromReader);
+            }
         }
-*/
-        printf("Press any key to continue. . . \n");
-        //cout << "Press any key to continue. . .\n";
 
+        printf("(1) end, (*) repeat \n");
+        scanf("%s", temp);
+        //Because scanf() ignores the trailing newline
+        getchar();
     }
-    return success;
+    return true;
 }
 
 bool removing_process(f_reader_commands &commandsLib, int pageId, sqlite3 *db, int rc) {

@@ -10,7 +10,7 @@ import java.io.OutputStream;
 /**
  * Created by tomas.bublik on 22.3.2016.
  */
-public class TwoWaySerialComm {
+public class TwoWaySerialCommunication {
     public void connect(String portName) throws Exception {
         CommPortIdentifier portIdentifier = CommPortIdentifier.getPortIdentifier(portName);
         if (portIdentifier.isCurrentlyOwned()) {
@@ -89,7 +89,7 @@ public class TwoWaySerialComm {
 
     public static void main(String[] args) {
         try {
-            (new TwoWaySerialComm()).connect("/dev/ttyUSB0");
+            (new TwoWaySerialCommunication()).connect("/dev/ttyUSB0");
         } catch (Exception e) {
             e.printStackTrace();
         }
