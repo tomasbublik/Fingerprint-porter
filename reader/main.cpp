@@ -435,7 +435,7 @@ void get_time(const char *buffer) {
 
     time(&rawTime);
     timeInfo = localtime(&rawTime);
-    //printf("Current time: %s", asctime(timeInfo));
+    printf("Current time: %s", asctime(timeInfo));
 
     strftime((char *) buffer, 80, "%Y-%m-%dT%H:%M:%S", timeInfo);
 }
